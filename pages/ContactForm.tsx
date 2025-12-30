@@ -3,15 +3,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link, useParams } from 'react-router-dom';
 import { ChevronLeft, Save, CheckCircle, Loader2, AlertCircle, DollarSign, User } from 'lucide-react';
 import { ContactStatus, Contact, ServiceType, UserRole } from '../types';
-import { ORIGINS, MOCK_CONTACTS, MOCK_USERS } from '../constants';
+import { ORIGINS, MOCK_USERS } from '../constants';
 import { useAuth } from '../App';
+import { db } from '../services/dbService';
 
 const ContactForm: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
   const [formData, setFormData] = useState<Partial<Contact>>({
     name: '',
@@ -32,29 +32,12 @@ const ContactForm: React.FC = () => {
 
   useEffect(() => {
     if (isEditMode && id) {
-      const contactToEdit = MOCK_CONTACTS.find(c => c.id === id);
+      const contactToEdit = db.getContacts().find(c => c.id === id);
       if (contactToEdit) {
         setFormData(contactToEdit);
       }
     }
   }, [id, isEditMode]);
-
-  const saveToDatabase = useCallback((data: Partial<Contact>) => {
-    setIsSaving(true);
-    // Simulación de persistencia
-    setTimeout(() => {
-      setIsSaving(false);
-      setLastSaved(new Date());
-    }, 800);
-  }, []);
-
-  useEffect(() => {
-    if (!formData.name && !formData.companyName) return;
-    // Solo autoguarda si no estamos en modo edición para evitar cambios accidentales
-    if (isEditMode) return;
-    const timer = setTimeout(() => saveToDatabase(formData), 1500);
-    return () => clearTimeout(timer);
-  }, [formData, saveToDatabase, isEditMode]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -71,8 +54,8 @@ const ContactForm: React.FC = () => {
     if (!isFormValid) return;
     
     setIsSaving(true);
-    // Simulación de guardado final
     setTimeout(() => {
+      db.saveContact(formData);
       setIsSaving(false);
       navigate(isEditMode ? `/contacts/${id}` : '/contacts');
     }, 1000);
@@ -85,10 +68,6 @@ const ContactForm: React.FC = () => {
           <ChevronLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           Volver a {isEditMode ? 'detalles' : 'contactos'}
         </Link>
-        <div className="flex items-center gap-3">
-          {isSaving && <div className="text-xs font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-100">Guardando...</div>}
-          {lastSaved && !isSaving && !isEditMode && <div className="text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-100">Autoguardado</div>}
-        </div>
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
@@ -96,9 +75,6 @@ const ContactForm: React.FC = () => {
           <h1 className="text-2xl font-bold text-[#2E2E2E]">
             {isEditMode ? `Editando: ${formData.name}` : 'Registro Comercial'}
           </h1>
-          <p className="text-[#6B7280] text-sm mt-1">
-            {isEditMode ? 'Actualiza la información estratégica del contacto.' : 'Ingresa los datos del lead y su potencial de negocio.'}
-          </p>
         </div>
 
         <form onSubmit={handleFinalSave} className="p-8">
@@ -125,14 +101,13 @@ const ContactForm: React.FC = () => {
                    <input type="number" name="contractValue" value={formData.contractValue} onChange={handleChange} className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-[#0B3C5D]" placeholder="0.00" />
                 </div>
               </div>
-
               {isAdmin && (
                 <div>
                   <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <User className="w-3 h-3 text-indigo-500" /> Gestor Asignado (Admin Only)
+                    <User className="w-3 h-3 text-indigo-500" /> Gestor Asignado
                   </label>
                   <select name="ownerId" value={formData.ownerId} onChange={handleChange} className="w-full px-4 py-2.5 bg-indigo-50 border border-indigo-100 rounded-xl outline-none text-indigo-900 font-semibold">
-                    {MOCK_USERS.map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
+                    {MOCK_USERS.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
                 </div>
               )}
@@ -168,11 +143,7 @@ const ContactForm: React.FC = () => {
               className="px-10 py-3 bg-[#0B3C5D] text-white rounded-xl font-bold shadow-lg shadow-blue-900/10 hover:opacity-90 transition-all flex items-center gap-2 disabled:opacity-30"
               disabled={!isFormValid || isSaving}
             >
-              {isSaving ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Save className="w-5 h-5" />
-              )}
+              {isSaving ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
               {isEditMode ? 'Actualizar Contacto' : 'Guardar y Registrar'}
             </button>
           </div>
